@@ -1,0 +1,72 @@
+---
+title: Practical Machine Learning Assignment
+output: html_document
+---
+##Introduction
+
+Human Activity Recognition (HAR) is gaining momentum from individuals who want to use the information gathered to track exercise activity, among other reasons.  In order to further research, data was collected on 6 individuals who performed various weight lifting exercises with accelerometers located on the individual in specific locations.  The exercises were performed correctly and incorrectly in 5 different ways.  The purpose of this assignment is to develop a model that will predict, based ont the accelerometer data, whether or not the exercise was done correctly, or which way it was done incorrectly.
+
+#Data Processing
+
+The first step in the data analysis was to load the training dataset and remove any columns in which there was an NA,blank, or #DIV/0 value.  Also, the first seven columns were removed as they did not contain accelerometer data.
+
+```{r cache=TRUE}
+pmltraining<-read.csv("pml-training.csv",na.strings=c("","NA","#DIV/0!"))
+pmltraining<-pmltraining[,colSums(is.na(pmltraining))==0]
+pmltraining<-pmltraining[,-c(1:7)]
+```
+
+Next, the training data set was split into two datasets for analysis, a training and test set. This was done for additional validation on the model. The pml-testing.csv data set then served as a validation data set.
+
+```{r cache=TRUE}
+library(caret)
+set.seed(1445)
+inTrain<-createDataPartition(y=pmltraining$classe,p=0.6,list=FALSE)
+training<-pmltraining[inTrain,]
+test<-pmltraining[-inTrain,]
+```
+
+Following the split, a classification tree model was tried on the training set to determine accuracy of that model.
+
+```{r cache=TRUE}
+modFitRPart<-train(classe~.,method="rpart",data=training)
+modFitRPartpredict<-predict(modFitRPart$finalModel,training, type = "class")
+confusionMatrix(modFitRPartpredict,training$classe)
+```
+
+As shown above, the accuracy of the model was low.  Therefore, further analysis was performed using random forest modeling with cross validation as the resampling method.
+
+```{r cache=TRUE}
+modFitRF<-train(classe~.,method="rf",data=training,trControl=trainControl(method="cv",number = 5),prox=TRUE)
+modFitRFpredict<-predict(modFitRF$finalModel,training, type="class")
+confusionMatrix(modFitRFpredict,training$classe)
+modFitRFpredicttest<-predict(modFitRF$finalModel,test, type="class")
+confusionMatrix(modFitRFpredicttest,test$classe)
+```
+
+The accuracy is 99.1%.  The sample error would then be 1-0.991 = 0.009, or 0.9%.
+
+##Project submission 
+
+The test/validation data set was then read into R while removing the same variables as the test set and then the classe variable was predicted using the random forest model generated from the training dataset.
+
+```{r cache=TRUE}
+pmltest<-read.csv("pml-testing.csv",na.strings=c("","NA","#DIV/0!"))
+pmltest<-pmltest[,colSums(is.na(pmltest))==0]
+pmltest<-pmltest[,-c(1:7)]
+predicttest<-predict(modFitRF$finalModel,pmltest,type="class")
+```
+
+The following code was provided with the assignment and created a .txt file for each of the 20 samples and contained the predicted classe (A,B,C,D, or E) for that sample.
+
+
+```{r eval=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(predicttest)
+```
